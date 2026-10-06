@@ -1,0 +1,20 @@
+import pyodbc
+
+class ConexionSQL:
+
+@staticmethod
+def conectar():
+    try:
+        conexion = pyodbc.connect(
+            "DRIVER={ODBC Driver 17 for SQL Server};"
+            "SERVER=(localdb)\\MSSQLLocalDB;"
+            "DATABASE=ControlAcademicoDB;"
+            "Trusted_Connection=yes;"
+        )
+
+        return conexion
+
+    except Exception as e:
+        print("Error de conexion:")
+        print(e)
+        return None
