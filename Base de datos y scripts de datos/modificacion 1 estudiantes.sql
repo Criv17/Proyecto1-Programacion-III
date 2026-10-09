@@ -1,3 +1,5 @@
+use controlacademico
+--modificacion a tabla estudiantes
 ALTER TABLE Matriculas
 DROP CONSTRAINT FK_Matriculas_Estudiantes;
 GO

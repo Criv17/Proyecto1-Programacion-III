@@ -1,3 +1,6 @@
+use ControlAcademico
+--modificacion a tabla asistencias
+
 ALTER TABLE Asistencias
 DROP CONSTRAINT FK_Asistencias_Matriculas;
 GO
