@@ -51,7 +51,8 @@ CREATE TABLE Matriculas (
 
     CONSTRAINT FK_Matriculas_Estudiantes
         FOREIGN KEY (cedula)
-        REFERENCES Estudiantes(id),
+        REFERENCES Estudiantes(id)
+        ON DELETE CASCADE,
 
     CONSTRAINT FK_Matriculas_Cursos
         FOREIGN KEY (referencia)
@@ -70,7 +71,8 @@ CREATE TABLE Asistencias (
 
     CONSTRAINT FK_Asistencias_Matriculas
         FOREIGN KEY (matricula_id)
-        REFERENCES Matriculas(id),
+        REFERENCES Matriculas(id)
+        ON DELETE CASCADE,
 
     CONSTRAINT UQ_Asistencia_Matricula_Fecha
         UNIQUE (matricula_id, fecha)
