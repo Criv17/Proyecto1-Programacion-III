@@ -6,7 +6,7 @@ from tkinter import ttk
  
 import Estudiantes
 import Cursos
-import Matricula
+# import Matricula
  
 # crear Ventana Principal
  
@@ -43,7 +43,6 @@ notebook.add(tab_asistencias, text="Asistencias")
  
 Estudiantes.crear_tab(tab_estudiantes)
 Cursos.crear_tab(tab_cursos)
-Matricula.crear_tab(tab_matriculas)
 
 
  
