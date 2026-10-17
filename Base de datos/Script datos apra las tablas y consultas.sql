@@ -1,3 +1,5 @@
+use Centro_Academico;
+go
 /* DATOS DE ESTUDIANTES */
 
 INSERT INTO Estudiantes
@@ -57,7 +59,7 @@ GO
 /* DATOS DE MATRICULAS */
 
 INSERT INTO Matriculas
-(cedula, referencia, fecha_matricula, estado)
+(estudiante_id, curso_id, fecha_matricula, estado)
 VALUES
 (1, 1, '2026-04-20', 'Activa'),
 (2, 1, '2026-04-21', 'Activa'),

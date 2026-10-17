@@ -3,7 +3,7 @@
 CREATE DATABASE ControlAcademico;
 GO
 
-USE ControlAcademicoDB;
+USE ControlAcademico;
 GO
 
 
@@ -44,19 +44,22 @@ GO
 
 CREATE TABLE Matriculas (
     id INT IDENTITY(1,1) PRIMARY KEY,
-    cedula INT NOT NULL,
-    referencia INT NOT NULL,
+    estudiante_id INT NOT NULL,
+    curso_id INT NOT NULL,
     fecha_matricula DATE NOT NULL,
     estado VARCHAR(20) NOT NULL,
 
     CONSTRAINT FK_Matriculas_Estudiantes
-        FOREIGN KEY (cedula)
+        FOREIGN KEY (estudiante_id)
         REFERENCES Estudiantes(id)
         ON DELETE CASCADE,
 
     CONSTRAINT FK_Matriculas_Cursos
-        FOREIGN KEY (referencia)
-        REFERENCES Cursos(id)
+        FOREIGN KEY (curso_id)
+        REFERENCES Cursos(id),
+
+    CONSTRAINT UQ_Matricula_Estudiante_Curso /*Evita matriculas duplicadas*/
+       UNIQUE (estudiante_id, curso_id)
 );
 GO
 
