@@ -1,14 +1,12 @@
 #Inicio de proyecto 1 de programacion III
- 
-import os
-import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
- 
+
 import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import date
 from tkcalendar import DateEntry
-from PYTHON.Cursos import Cursos
+import pyodbc
+ 
+import Cursosbd
  
  
 ########## IMPORTANTE ##########
@@ -16,59 +14,56 @@ from PYTHON.Cursos import Cursos
 ################################
  
  
-# Objeto que conecta la interfaz con las operaciones de cursos
-gestor_cursos = Cursos()
+modelo = Cursosbd.Cursos()
+ 
+# filas que se muestran en la tabla: id -> fila
+# (se usa al seleccionar, asi no se pierden ceros ni se ven valores None)
+datos_cargados = {}
  
  
-# Datos / base de datos #
- 
-def texto(valor):
-    # Si el dato viene vacio (NULL) de la base de datos, se muestra en blanco
-    return "" if valor is None else str(valor)
- 
- 
-# Esta funcion la usa tambien Matricula.py, por eso se mantiene con el mismo nombre
-# y devuelve las filas en el mismo orden de siempre
-def db_listar_cursos():
-    # El mas reciente primero
-    filas = []
- 
-    for fila in gestor_cursos.listar():
-        filas.append((
-            fila[0],
-            texto(fila[1]),
-            texto(fila[2]),
-            texto(fila[3]),
-            texto(fila[4]),
-            gestor_cursos.estado_a_texto(fila[5]),
-            texto(fila[6]),
-            texto(fila[7]),
-            texto(fila[8]),
-            texto(fila[9])
-        ))
- 
-    return sorted(filas, key=lambda fila: fila[0], reverse=True)
- 
- 
-#Funciones#
+#Funciones de la interfaz
  
 def cargar_cursos():
     for item in tabla_cursos.get_children():
         tabla_cursos.delete(item)
  
+    datos_cargados.clear()
+ 
     try:
-        # Obtiene los cursos desde SQL Server
-        datos = db_listar_cursos()
+        filas = modelo.listar()
+    except pyodbc.Error as error:
+        messagebox.showerror("Error de base de datos", str(error))
+        filas = []
  
-        for fila in datos:
-            tabla_cursos.insert("", tk.END, values=fila)
+    # El mas reciente primero
+    for fila in reversed(filas):
+        # la BD devuelve None en los campos vacios, en la tabla se ven vacios
+        fila = tuple("" if valor is None else valor for valor in fila)
  
-        lbl_total_cursos.config(
-            text=f"Total cursos: {len(datos)}"
-        )
+        # el estado viene como 1 o 0, en pantalla se ve como texto
+        fila = fila[:5] + (modelo.estado_a_texto(fila[5]),) + fila[6:]
  
-    except Exception as error:
-        messagebox.showerror("Error de conexion", str(error))
+        datos_cargados[str(fila[0])] = fila
+        tabla_cursos.insert("", tk.END, iid=str(fila[0]), values=fila)
+ 
+    lbl_total_cursos.config(
+        text=f"Total cursos: {len(filas)}"
+    )
+ 
+ 
+def leer_form_curso():
+    # mismo orden que piden registrar() y modificar()
+    return (
+        txt_referencia.get().strip(),
+        txt_descripcion.get().strip(),
+        txt_fecha_inicio.get(),
+        txt_fecha_final.get(),
+        cmb_estado.get(),
+        txt_docente.get().strip(),
+        txt_horas_cap.get().strip(),
+        txt_horas_ase.get().strip(),
+        txt_mes.get().strip()
+    )
  
  
 def limpiar_curso():
@@ -92,75 +87,45 @@ def limpiar_curso():
     txt_mes.delete(0, tk.END)
  
  
-def leer_form_curso():
-    # Devuelve los datos en el mismo orden que los recibe PYTHON/Cursos.py
-    return (
-        txt_referencia.get().strip(),
-        txt_descripcion.get().strip(),
-        txt_fecha_inicio.get(),
-        txt_fecha_final.get(),
-        cmb_estado.get(),
-        txt_docente.get().strip(),
-        txt_horas_cap.get().strip(),
-        txt_horas_ase.get().strip(),
-        txt_mes.get().strip()
-    )
- 
- 
 def agregar_curso():
-    datos = leer_form_curso()
  
     try:
-        # El metodo registrar valida los datos y los guarda en SQL Server
-        gestor_cursos.registrar(*datos)
+        modelo.registrar(*leer_form_curso())
+    except (ValueError, pyodbc.Error) as error:
+        messagebox.showerror("Error", str(error))
+        return
  
-        cargar_cursos()
-        limpiar_curso()
+    cargar_cursos()
+    limpiar_curso()
  
-        messagebox.showinfo(
-            "Exito",
-            "Curso guardado."
-        )
- 
-    except Exception as error:
-        messagebox.showerror("No se pudo registrar", str(error))
+    messagebox.showinfo(
+        "Exito",
+        "Hecho correctamente"
+    )
  
  
 def actualizar_curso():
  
     if txt_id_curso.get() == "":
-        messagebox.showwarning(
-            "Seleccionar curso",
-            "Seleccione un curso de la tabla antes de actualizar."
-        )
         return
  
-    datos = leer_form_curso()
- 
     try:
-        # La referencia se conserva como identificador, por eso queda bloqueada
-        # al seleccionar un curso. Los demas datos si se pueden cambiar.
-        gestor_cursos.modificar(*datos)
+        modelo.modificar(*leer_form_curso())
+    except (ValueError, pyodbc.Error) as error:
+        messagebox.showerror("Error", str(error))
+        return
  
-        cargar_cursos()
-        limpiar_curso()
+    cargar_cursos()
  
-        messagebox.showinfo(
-            "Actualizado",
-            "Registro actualizado"
-        )
- 
-    except Exception as error:
-        messagebox.showerror("No se pudo actualizar", str(error))
+    messagebox.showinfo(
+        "Actualizado",
+        "Registro actualizado"
+    )
  
  
 def eliminar_curso():
  
     if txt_id_curso.get() == "":
-        messagebox.showwarning(
-            "Seleccionar curso",
-            "Seleccione un curso de la tabla antes de eliminar."
-        )
         return
  
     respuesta = messagebox.askyesno(
@@ -171,67 +136,63 @@ def eliminar_curso():
     if respuesta:
  
         try:
-            # El metodo eliminar recibe la referencia del curso seleccionado
-            gestor_cursos.eliminar(txt_referencia.get())
+            modelo.eliminar(txt_referencia.get())
  
-            cargar_cursos()
-            limpiar_curso()
- 
-            messagebox.showinfo(
-                "Eliminado",
-                "Curso eliminado."
+        except pyodbc.IntegrityError:
+            # tiene matriculas o dias no laborados
+            messagebox.showerror(
+                "No se puede eliminar",
+                "El curso tiene matriculas o dias no laborados registrados."
             )
+            return
  
-        except Exception as error:
-            messagebox.showerror("No se pudo eliminar", str(error))
+        except (ValueError, pyodbc.Error) as error:
+            messagebox.showerror("Error", str(error))
+            return
+ 
+        cargar_cursos()
+        limpiar_curso()
  
  
 def seleccionar_curso(event):
-    fila = tabla_cursos.focus()
+    fila = datos_cargados.get(tabla_cursos.focus())
  
-    if not fila:
+    if fila is None:
         return
- 
-    datos = tabla_cursos.item(
-        fila,
-        "values"
-    )
  
     txt_id_curso.config(state="normal")
     txt_id_curso.delete(0, tk.END)
-    txt_id_curso.insert(0, datos[0])
+    txt_id_curso.insert(0, fila[0])
     txt_id_curso.config(state="readonly")
  
-    # La referencia se usa para localizar el registro en modificar/eliminar.
-    # Se bloquea durante la edicion para evitar que deje de coincidir.
+    # la referencia no se puede cambiar, sirve para localizar el curso
     txt_referencia.config(state="normal")
     txt_referencia.delete(0, tk.END)
+    txt_referencia.insert(0, fila[1])
+    txt_referencia.config(state="readonly")
+ 
     txt_descripcion.delete(0, tk.END)
     txt_docente.delete(0, tk.END)
     txt_horas_cap.delete(0, tk.END)
     txt_horas_ase.delete(0, tk.END)
     txt_mes.delete(0, tk.END)
  
-    txt_referencia.insert(0, datos[1])
-    txt_referencia.config(state="readonly")
-    txt_descripcion.insert(0, datos[2])
-    txt_fecha_inicio.set_date(datos[3])
-    txt_fecha_final.set_date(datos[4])
-    cmb_estado.set(datos[5])
-    txt_docente.insert(0, datos[6])
-    txt_horas_cap.insert(0, datos[7])
-    txt_horas_ase.insert(0, datos[8])
-    txt_mes.insert(0, datos[9])
- 
+    txt_descripcion.insert(0, fila[2])
+    txt_fecha_inicio.set_date(fila[3])
+    txt_fecha_final.set_date(fila[4])
+    cmb_estado.set(fila[5])
+    txt_docente.insert(0, fila[6])
+    txt_horas_cap.insert(0, str(fila[7]))
+    txt_horas_ase.insert(0, str(fila[8]))
+    txt_mes.insert(0, fila[9])
  
  
 # interfaz #
-# llama a ventana principal y recibe el Frame de la pestaña #
- 
+# la llama Ventana_principal.py y recibe el Frame de la pestaña #
  
 def crear_tab(parent):
  
-  #globales para usar arriba
+    #globales para usar arriba
     global txt_id_curso, txt_referencia, txt_descripcion
     global txt_fecha_inicio, txt_fecha_final, cmb_estado
     global txt_docente, txt_horas_cap, txt_horas_ase, txt_mes
@@ -288,7 +249,7 @@ def crear_tab(parent):
     )
     txt_fecha_final.grid(row=3, column=1, sticky="w", padx=(10, 40))
  
-    # estado
+    # estado (en la base de datos es 1 = Activo, 0 = Inactivo)
     tk.Label(frame_datos_curso, text="Estado").grid(row=4, column=0, pady=5, sticky="w")
     cmb_estado = ttk.Combobox(
         frame_datos_curso,
