@@ -1,74 +1,68 @@
 #Inicio de proyecto 1 de programacion III
  
-import os
-import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
- 
 import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import date
 from tkcalendar import DateEntry
-from PYTHON.Cursos import Cursos
+import pyodbc
+ 
+import Cursosbd
  
  
 ########## IMPORTANTE ##########
-#pip install tkcalendar (en el cmd de la pc o en la terminal de visual studio code)
+#pip install tkcalendar pyodbc (en el cmd de la pc o en la terminal de visual studio code)
 ################################
  
  
 # Objeto que conecta la interfaz con las operaciones de cursos
-gestor_cursos = Cursos()
+modelo = Cursosbd.Cursos()
+ 
+# filas que se muestran en la tabla: id -> fila
+# (se usa al seleccionar, asi no se pierden ceros ni se ven valores None)
+datos_cargados = {}
  
  
-# Datos / base de datos #
+# Datos de la base de datos #
  
-def texto(valor):
-    # Si el dato viene vacio (NULL) de la base de datos, se muestra en blanco
-    return "" if valor is None else str(valor)
+def convertir_fila(fila):
+    # La BD devuelve None en los campos vacios, en la tabla se ven vacios.
+    # El estado se guarda como 1 o 0, pero en la tabla se muestra como texto.
+    valores = ["" if valor is None else str(valor) for valor in fila[1:]]
+    valores[4] = modelo.estado_a_texto(fila[5])
+ 
+    return (fila[0], *valores)
  
  
 # Esta funcion la usa tambien Matricula.py, por eso se mantiene con el mismo nombre
 # y devuelve las filas en el mismo orden de siempre
 def db_listar_cursos():
     # El mas reciente primero
-    filas = []
- 
-    for fila in gestor_cursos.listar():
-        filas.append((
-            fila[0],
-            texto(fila[1]),
-            texto(fila[2]),
-            texto(fila[3]),
-            texto(fila[4]),
-            gestor_cursos.estado_a_texto(fila[5]),
-            texto(fila[6]),
-            texto(fila[7]),
-            texto(fila[8]),
-            texto(fila[9])
-        ))
+    filas = [convertir_fila(fila) for fila in modelo.listar()]
  
     return sorted(filas, key=lambda fila: fila[0], reverse=True)
  
  
-#Funciones#
+#Funciones de la interfaz#
  
 def cargar_cursos():
     for item in tabla_cursos.get_children():
         tabla_cursos.delete(item)
  
+    datos_cargados.clear()
+ 
     try:
-        # Obtiene los cursos desde SQL Server
-        datos = db_listar_cursos()
+        filas = db_listar_cursos()
+    except pyodbc.Error as error:
+        messagebox.showerror("Error de base de datos", str(error))
+        filas = []
  
-        for fila in datos:
-            tabla_cursos.insert("", tk.END, values=fila)
+    for fila in filas:
+        datos_cargados[str(fila[0])] = fila
+        tabla_cursos.insert("", tk.END, iid=str(fila[0]), values=fila)
  
-        lbl_total_cursos.config(
-            text=f"Total cursos: {len(datos)}"
-        )
- 
-    except Exception as error:
-        messagebox.showerror("Error de conexion", str(error))
+    lbl_total_cursos.config(
+        text=f"Total cursos: {len(filas)}"
+    )
  
  
 def limpiar_curso():
@@ -93,7 +87,7 @@ def limpiar_curso():
  
  
 def leer_form_curso():
-    # Devuelve los datos en el mismo orden que los recibe PYTHON/Cursos.py
+    # mismo orden que piden registrar() y modificar()
     return (
         txt_referencia.get().strip(),
         txt_descripcion.get().strip(),
@@ -108,22 +102,20 @@ def leer_form_curso():
  
  
 def agregar_curso():
-    datos = leer_form_curso()
  
     try:
-        # El metodo registrar valida los datos y los guarda en SQL Server
-        gestor_cursos.registrar(*datos)
+        modelo.registrar(*leer_form_curso())
+    except (ValueError, pyodbc.Error) as error:
+        messagebox.showerror("Error", str(error))
+        return
  
-        cargar_cursos()
-        limpiar_curso()
+    cargar_cursos()
+    limpiar_curso()
  
-        messagebox.showinfo(
-            "Exito",
-            "Curso guardado."
-        )
- 
-    except Exception as error:
-        messagebox.showerror("No se pudo registrar", str(error))
+    messagebox.showinfo(
+        "Exito",
+        "Hecho correctamente"
+    )
  
  
 def actualizar_curso():
@@ -135,23 +127,19 @@ def actualizar_curso():
         )
         return
  
-    datos = leer_form_curso()
- 
     try:
-        # La referencia se conserva como identificador, por eso queda bloqueada
-        # al seleccionar un curso. Los demas datos si se pueden cambiar.
-        gestor_cursos.modificar(*datos)
+        modelo.modificar(*leer_form_curso())
+    except (ValueError, pyodbc.Error) as error:
+        messagebox.showerror("Error", str(error))
+        return
  
-        cargar_cursos()
-        limpiar_curso()
+    cargar_cursos()
+    limpiar_curso()
  
-        messagebox.showinfo(
-            "Actualizado",
-            "Registro actualizado"
-        )
- 
-    except Exception as error:
-        messagebox.showerror("No se pudo actualizar", str(error))
+    messagebox.showinfo(
+        "Actualizado",
+        "Registro actualizado"
+    )
  
  
 def eliminar_curso():
@@ -163,47 +151,53 @@ def eliminar_curso():
         )
         return
  
+    referencia = txt_referencia.get()
+ 
+    try:
+        cantidad = modelo.contar_matriculas(referencia)
+    except pyodbc.Error as error:
+        messagebox.showerror("Error de base de datos", str(error))
+        return
+ 
+    if cantidad > 0:
+        mensaje = (
+            f"El curso tiene {cantidad} matricula(s). "
+            "Si lo elimina, tambien se eliminaran sus matriculas, "
+            "sus asistencias y sus dias no laborados.\n\nDesea continuar?"
+        )
+    else:
+        mensaje = "Desea eliminar el curso?"
+ 
     respuesta = messagebox.askyesno(
         "Eliminar",
-        "Desea eliminar el curso?"
+        mensaje
     )
  
     if respuesta:
  
         try:
-            # El metodo eliminar recibe la referencia del curso seleccionado
-            gestor_cursos.eliminar(txt_referencia.get())
+            modelo.eliminar(referencia)
+        except (ValueError, pyodbc.Error) as error:
+            messagebox.showerror("Error", str(error))
+            return
  
-            cargar_cursos()
-            limpiar_curso()
- 
-            messagebox.showinfo(
-                "Eliminado",
-                "Curso eliminado."
-            )
- 
-        except Exception as error:
-            messagebox.showerror("No se pudo eliminar", str(error))
+        cargar_cursos()
+        limpiar_curso()
  
  
+ #funcion seleccioanr el curso de la tabla y mostrarlo en el formulario
 def seleccionar_curso(event):
-    fila = tabla_cursos.focus()
+    fila = datos_cargados.get(tabla_cursos.focus())
  
-    if not fila:
+    if fila is None:
         return
- 
-    datos = tabla_cursos.item(
-        fila,
-        "values"
-    )
  
     txt_id_curso.config(state="normal")
     txt_id_curso.delete(0, tk.END)
-    txt_id_curso.insert(0, datos[0])
+    txt_id_curso.insert(0, fila[0])
     txt_id_curso.config(state="readonly")
  
-    # La referencia se usa para localizar el registro en modificar/eliminar.
-    # Se bloquea durante la edicion para evitar que deje de coincidir.
+    # la referencia no se puede cambiar, sirve para localizar el curso
     txt_referencia.config(state="normal")
     txt_referencia.delete(0, tk.END)
     txt_descripcion.delete(0, tk.END)
@@ -212,26 +206,26 @@ def seleccionar_curso(event):
     txt_horas_ase.delete(0, tk.END)
     txt_mes.delete(0, tk.END)
  
-    txt_referencia.insert(0, datos[1])
+    txt_referencia.insert(0, fila[1])
     txt_referencia.config(state="readonly")
-    txt_descripcion.insert(0, datos[2])
-    txt_fecha_inicio.set_date(datos[3])
-    txt_fecha_final.set_date(datos[4])
-    cmb_estado.set(datos[5])
-    txt_docente.insert(0, datos[6])
-    txt_horas_cap.insert(0, datos[7])
-    txt_horas_ase.insert(0, datos[8])
-    txt_mes.insert(0, datos[9])
- 
+    txt_descripcion.insert(0, fila[2])
+    txt_fecha_inicio.set_date(fila[3])
+    txt_fecha_final.set_date(fila[4])
+    cmb_estado.set(fila[5])
+    txt_docente.insert(0, fila[6])
+    txt_horas_cap.insert(0, fila[7])
+    txt_horas_ase.insert(0, fila[8])
+    txt_mes.insert(0, fila[9])
  
  
 # interfaz #
 # llama a ventana principal y recibe el Frame de la pestaña #
  
  
+ #funcion que crea la pestaña de cursos y todos sus elementos
 def crear_tab(parent):
  
-  #globales para usar arriba
+    #globales para usar arriba
     global txt_id_curso, txt_referencia, txt_descripcion
     global txt_fecha_inicio, txt_fecha_final, cmb_estado
     global txt_docente, txt_horas_cap, txt_horas_ase, txt_mes
