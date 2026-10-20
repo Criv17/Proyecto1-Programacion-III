@@ -5,7 +5,7 @@ from tkinter import messagebox
 def conectar():
     return pyodbc.connect(
         "DRIVER={ODBC Driver 17 for SQL Server};"
-        "SERVER=localhost;"                 
+        r"SERVER=(localdb)\MSSQLLocalDB;"                 
         "DATABASE=ControlAcademico;"
         "Trusted_Connection=yes;"           
         "TrustServerCertificate=yes;",
